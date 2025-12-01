@@ -1,29 +1,15 @@
-/**
- * Jenkins Declarative Pipeline with:
- * - Static parameters (choice, string, boolean)
- * - Dynamic parameter (BRANCH) using Groovy + git ls-remote
- * - Conditional Test stage (RUN_TESTS)
- * - Environment-based Deploy stage (ENV)
- */
-
 def getGitBranches() {
-    // Fetch remote branches from 'origin'
     def output = sh(
         script: "git ls-remote --heads origin | awk '{print \$2}' | sed 's#refs/heads/##'",
         returnStdout: true
     ).trim()
 
-    if (!output) {
-        return 'main'
-    }
-
-    return output.split('\n').join('\n')
+    return output ? output.split('\n').join('\n') : 'main'
 }
 
 pipeline {
     agent any
 
-    // ---- Step 1: Add parameters (choice, string, boolean) ----
     parameters {
         choice(
             name: 'ENV',
@@ -32,58 +18,54 @@ dev
 qa
 prod
 """,
-            description: 'Target environment for deployment'
+            description: 'Target environment'
         )
         string(
             name: 'APP_VERSION',
             defaultValue: '1.0.0',
-            description: 'Application version/tag'
+            description: 'App version'
         )
         booleanParam(
             name: 'RUN_TESTS',
             defaultValue: true,
-            description: 'Run tests stage?'
+            description: 'Run tests?'
         )
-        // Placeholder; dynamic values will replace this
         choice(
             name: 'BRANCH',
             choices: "main",
-            description: 'Git branch to build (dynamic)'
+            description: 'Git branch (dynamic)'
         )
     }
 
     stages {
 
-        // ---- Step 2: Use Groovy to fetch dynamic values (branches) ----
-        stage('Init dynamic parameters') {
+        stage("Init dynamic parameters") {
             steps {
                 script {
-                    echo "Fetching remote branches for dynamic parameter..."
+                    echo "Fetching dynamic git branches..."
                     def branchChoices = getGitBranches()
-                    echo "Available branches:\n${branchChoices}"
 
-                    // Re-define pipeline parameters dynamically
                     properties([
                         parameters([
                             choice(
                                 name: 'ENV',
                                 choices: "dev\nqa\nprod",
-                                description: 'Target environment for deployment'
+                                description: ''
                             ),
                             string(
                                 name: 'APP_VERSION',
-                                defaultValue: APP_VERSION,
-                                description: 'Application version/tag'
+                                defaultValue: params.APP_VERSION,
+                                description: ''
                             ),
                             booleanParam(
                                 name: 'RUN_TESTS',
-                                defaultValue: RUN_TESTS,
-                                description: 'Run tests stage?'
+                                defaultValue: params.RUN_TESTS,
+                                description: ''
                             ),
                             choice(
                                 name: 'BRANCH',
                                 choices: branchChoices,
-                                description: 'Git branch to build (dynamic)'
+                                description: ''
                             )
                         ])
                     ])
@@ -93,36 +75,36 @@ prod
 
         stage('Checkout') {
             steps {
-                echo "Checking out branch: ${BRANCH}"
+                echo "Checking out branch: ${params.BRANCH}"
                 checkout scm
-                sh "git checkout ${BRANCH}"
+                sh "git checkout ${params.BRANCH}"
             }
         }
 
         stage('Build') {
             steps {
-                echo "Building app version ${APP_VERSION} for ENV=${ENV}"
+                echo "Building app ${params.APP_VERSION} for ENV=${params.ENV}"
                 sh "./app.sh"
             }
         }
 
-        // ---- Step 3: Conditional stage based on parameter value ----
         stage('Test') {
             when {
-                expression { return RUN_TESTS == true }
+                expression { params.RUN_TESTS == true }
             }
             steps {
-                echo "RUN_TESTS is true, executing tests..."
+                echo "Running tests..."
                 sh "./test.sh"
             }
         }
 
         stage('Deploy') {
             steps {
-                echo "Deploying app version ${APP_VERSION} to ${ENV} from branch ${BRANCH}"
                 sh """
-                  echo 'Simulating deployment...'
-                  echo 'ENV=${ENV}, VERSION=${APP_VERSION}, BRANCH=${BRANCH}'
+                  echo 'Deploying...'
+                  echo 'ENV=${params.ENV}'
+                  echo 'VERSION=${params.APP_VERSION}'
+                  echo 'BRANCH=${params.BRANCH}'
                 """
             }
         }
@@ -130,11 +112,11 @@ prod
 
     post {
         always {
-            echo "Build finished. Summary:"
-            echo "  ENV        = ${ENV}"
-            echo "  APP_VERSION= ${APP_VERSION}"
-            echo "  BRANCH     = ${BRANCH}"
-            echo "  RUN_TESTS  = ${RUN_TESTS}"
+            echo "Build Summary:"
+            echo "ENV        = ${params.ENV}"
+            echo "APP_VERSION= ${params.APP_VERSION}"
+            echo "BRANCH     = ${params.BRANCH}"
+            echo "RUN_TESTS  = ${params.RUN_TESTS}"
         }
     }
 }
