@@ -8,18 +8,15 @@
 
 def getGitBranches() {
     // Fetch remote branches from 'origin'
-    // This needs git remote 'origin' to be set in the repo.
     def output = sh(
         script: "git ls-remote --heads origin | awk '{print \$2}' | sed 's#refs/heads/##'",
         returnStdout: true
     ).trim()
 
     if (!output) {
-        // Fallback if no remote branches found
         return 'main'
     }
 
-    // Jenkins "choice" parameter expects newline-separated list
     return output.split('\n').join('\n')
 }
 
@@ -30,7 +27,11 @@ pipeline {
     parameters {
         choice(
             name: 'ENV',
-            choices: ['dev', 'qa', 'prod'].join('\n'),
+            choices: """
+dev
+qa
+prod
+""",
             description: 'Target environment for deployment'
         )
         string(
@@ -43,11 +44,10 @@ pipeline {
             defaultValue: true,
             description: 'Run tests stage?'
         )
-
-        // Placeholder; we will override dynamically in Init stage
+        // Placeholder; dynamic values will replace this
         choice(
             name: 'BRANCH',
-            choices: 'main',
+            choices: "main",
             description: 'Git branch to build (dynamic)'
         )
     }
@@ -67,7 +67,7 @@ pipeline {
                         parameters([
                             choice(
                                 name: 'ENV',
-                                choices: ['dev', 'qa', 'prod'].join('\n'),
+                                choices: "dev\nqa\nprod",
                                 description: 'Target environment for deployment'
                             ),
                             string(
@@ -120,7 +120,6 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo "Deploying app version ${APP_VERSION} to ${ENV} from branch ${BRANCH}"
-                // Just echo instead of real deployment
                 sh """
                   echo 'Simulating deployment...'
                   echo 'ENV=${ENV}, VERSION=${APP_VERSION}, BRANCH=${BRANCH}'
@@ -139,3 +138,4 @@ pipeline {
         }
     }
 }
+
